@@ -1,0 +1,98 @@
+{
+  "checked_at": "2026-08-22T05:12:32.887267+00:00",
+  "target_date": null,
+  "required_uploads": 3,
+  "window_hours": 24,
+  "results": [
+    {
+      "owner": "Yooo",
+      "platform": "tiktok",
+      "username": "renaeericacentral",
+      "url": "https://www.tiktok.com/@renaeericacentral",
+      "status": "BEHIND",
+      "count": 0,
+      "times": []
+    },
+    {
+      "owner": "Yooo",
+      "platform": "tiktok",
+      "username": "renaeericavods",
+      "url": "https://www.tiktok.com/@renaeericavods",
+      "status": "BEHIND",
+      "count": 0,
+      "times": []
+    },
+    {
+      "owner": "Yooo",
+      "platform": "instagram",
+      "username": "renaeericacentral",
+      "url": "https://www.instagram.com/renaeericacentral",
+      "status": "UNVERIFIED",
+      "count": null,
+      "times": []
+    },
+    {
+      "owner": "Yooo",
+      "platform": "instagram",
+      "username": "renaeericahub",
+      "url": "https://www.instagram.com/renaeericahub",
+      "status": "UNVERIFIED",
+      "count": null,
+      "times": []
+    },
+    {
+      "owner": "Prudhiv",
+      "platform": "tiktok",
+      "username": "renaeericatv",
+      "url": "https://www.tiktok.com/@renaeericatv",
+      "status": "BEHIND",
+      "count": 0,
+      "times": []
+    },
+    {
+      "owner": "Prudhiv",
+      "platform": "instagram",
+      "username": "renaeericatvx",
+      "url": "https://www.instagram.com/renaeericatvx",
+      "status": "UNVERIFIED",
+      "count": null,
+      "times": []
+    },
+    {
+      "owner": "Prudhiv",
+      "platform": "instagram",
+      "username": "renaeericadaily",
+      "url": "https://www.instagram.com/renaeericadaily",
+      "status": "UNVERIFIED",
+      "count": null,
+      "times": []
+    },
+    {
+      "owner": "Prudhiv",
+      "platform": "tiktok",
+      "username": "renaeericadaily",
+      "url": "https://www.tiktok.com/@renaeericadaily",
+      "status": "BEHIND",
+      "count": 0,
+      "times": []
+    },
+    {
+      "owner": "Anya",
+      "platform": "instagram",
+      "username": "renaeerica.fanpage",
+      "url": "https://www.instagram.com/renaeerica.fanpage",
+      "status": "UNVERIFIED",
+      "count": null,
+      "times": []
+    },
+    {
+      "owner": "Anya",
+      "platform": "tiktok",
+      "username": "renaeerica.fanpage",
+      "url": "https://www.tiktok.com/@renaeerica.fanpage",
+      "status": "BEHIND",
+      "count": 0,
+      "times": []
+    }
+  ]
+}
