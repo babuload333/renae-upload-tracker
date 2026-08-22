@@ -1,0 +1,131 @@
+{
+  "checked_at": "2026-08-22T06:03:36.083660+00:00",
+  "timezone": "Asia/Kolkata",
+  "target_date": "2026-08-21",
+  "window_start": "2026-08-20T18:30:00+00:00",
+  "window_end": "2026-08-21T18:30:00+00:00",
+  "required_uploads": 3,
+  "window_hours": 24,
+  "results": [
+    {
+      "owner": "Yooo",
+      "platform": "tiktok",
+      "username": "renaeericacentral",
+      "status": "BEHIND",
+      "count": 1,
+      "required": 3,
+      "times": [
+        "2026-08-21T16:05:55+00:00"
+      ],
+      "urls": [
+        "https://www.tiktok.com/@renaeericacentral/video/7676516792948362527"
+      ]
+    },
+    {
+      "owner": "Yooo",
+      "platform": "tiktok",
+      "username": "renaeericavods",
+      "status": "BEHIND",
+      "count": 0,
+      "required": 3,
+      "times": [],
+      "urls": []
+    },
+    {
+      "owner": "Yooo",
+      "platform": "instagram",
+      "username": "renaeericacentral",
+      "status": "BEHIND",
+      "count": 1,
+      "required": 3,
+      "times": [
+        "2026-08-21T16:12:13+00:00"
+      ],
+      "urls": [
+        "https://www.instagram.com/p/DcTvM-roCD_/"
+      ]
+    },
+    {
+      "owner": "Yooo",
+      "platform": "instagram",
+      "username": "renaeericahub",
+      "status": "BEHIND",
+      "count": 1,
+      "required": 3,
+      "times": [
+        "2026-08-21T16:11:00+00:00"
+      ],
+      "urls": [
+        "https://www.instagram.com/p/DcTvEm3SGmP/"
+      ]
+    },
+    {
+      "owner": "Prudhiv",
+      "platform": "tiktok",
+      "username": "renaeericatv",
+      "status": "BEHIND",
+      "count": 0,
+      "required": 3,
+      "times": [],
+      "urls": []
+    },
+    {
+      "owner": "Prudhiv",
+      "platform": "instagram",
+      "username": "renaeericatvx",
+      "status": "BEHIND",
+      "count": 1,
+      "required": 3,
+      "times": [
+        "2026-08-21T18:23:58+00:00"
+      ],
+      "urls": [
+        "https://www.instagram.com/p/DcT-R6UTsTx/"
+      ]
+    },
+    {
+      "owner": "Prudhiv",
+      "platform": "instagram",
+      "username": "renaeericadaily",
+      "status": "BEHIND",
+      "count": 0,
+      "required": 3,
+      "times": [],
+      "urls": []
+    },
+    {
+      "owner": "Prudhiv",
+      "platform": "tiktok",
+      "username": "renaeericadaily",
+      "status": "BEHIND",
+      "count": 0,
+      "required": 3,
+      "times": [],
+      "urls": []
+    },
+    {
+      "owner": "Anya",
+      "platform": "instagram",
+      "username": "renaeerica.fanpage",
+      "status": "BEHIND",
+      "count": 1,
+      "required": 3,
+      "times": [
+        "2026-08-21T15:09:44+00:00"
+      ],
+      "urls": [
+        "https://www.instagram.com/p/DcTnt8QuCdw/"
+      ]
+    },
+    {
+      "owner": "Anya",
+      "platform": "tiktok",
+      "username": "renaeerica.fanpage",
+      "status": "BEHIND",
+      "count": 0,
+      "required": 3,
+      "times": [],
+      "urls": []
+    }
+  ]
+}
