@@ -1,20 +1,36 @@
-# Renae Upload Tracker
+# Renae Upload Tracker v2
 
-Tracks the 10 public Renae Erica Instagram/TikTok accounts and checks whether each has at least **3 videos/reels in the preceding 24 hours**.
+Free GitHub Actions tracker for the 10 public Renae Erica Instagram/TikTok accounts.
 
-## Accounts
-See `accounts.json`.
+## What changed in v2
 
-## Run locally
-```bash
-python tracker.py
-python tracker.py --date 2026-08-21
-```
+The old HTML timestamp parser was too primitive and returned misleading zeroes.
 
-The historical command is best-effort. Public social platforms can hide timestamps or block automated requests. The tracker therefore reports `UNVERIFIED` rather than inventing a zero.
+This version uses:
+- **TikTok:** `tt` (`tamnd/tiktok-cli`), an open-source CLI that reads public TikTok data without an API key or login.
+- **Instagram:** `Instaloader` 4.15.3, using its profile post/reel iterators.
 
-## GitHub Actions
-The workflow runs daily and can also be started manually from the **Actions** tab. GitHub supports scheduled workflows using `on.schedule` and cron syntax. citeturn0search0
+The tracker counts **video uploads** in a rolling 24-hour window. If a platform blocks access or timestamps cannot be verified, it reports `UNVERIFIED`.
+
+## Manual historical check
+
+In GitHub Actions:
+1. Open **Daily Renae Upload Check**
+2. Tap **Run workflow**
+3. Enter `2026-08-21` in **target_date**
+4. Run it
+
+The result will be saved as `results/2026-08-21.json`.
 
 ## Important
-This is a free/open-source approach. It does not bypass logins, private accounts, or platform access controls. It only uses publicly exposed profile-page data.
+
+This is still dependent on the public surfaces of Instagram and TikTok. GitHub-hosted runners can be blocked by social platforms. The tracker intentionally does not turn a blocked request into `0`.
+
+## Accounts
+
+All 10 accounts are in `accounts.json`.
+
+## Sources
+
+TikTok collector: https://github.com/tamnd/tiktok-cli
+Instagram collector: https://github.com/instaloader/instaloader
