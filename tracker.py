@@ -1,818 +1,654 @@
-import argparse
-import json
 import os
+import json
+import sys
+import time
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
-
+from pathlib import Path
+from urllib.parse import quote
 import requests
 
 
 # ============================================================
-# CONFIG
+# SETTINGS
 # ============================================================
-
-APIFY_TOKEN = os.environ.get("APIFY_API_TOKEN")
-
-TIKTOK_ACTOR = "clockworks~tiktok-scraper"
-INSTAGRAM_ACTOR = "apify~instagram-api-scraper"
 
 REQUIRED_UPLOADS = 3
 WINDOW_HOURS = 24
 
-IST = ZoneInfo("Asia/Kolkata")
+APIFY_TOKEN = os.environ.get("APIFY_TOKEN")
 
-TIKTOK_ACCOUNTS = [
-    "renaeericacentral",
-    "renaeericavods",
-    "renaeericatv",
-    "renaeericadaily",
-    "renaeerica.fanpage",
+if not APIFY_TOKEN:
+    raise RuntimeError("APIFY_TOKEN GitHub Secret is missing.")
+
+
+ACCOUNTS = [
+    # YOOO
+    {
+        "owner": "Yooo",
+        "platform": "tiktok",
+        "username": "renaeericacentral",
+    },
+    {
+        "owner": "Yooo",
+        "platform": "tiktok",
+        "username": "renaeericavods",
+    },
+    {
+        "owner": "Yooo",
+        "platform": "instagram",
+        "username": "renaeericacentral",
+    },
+    {
+        "owner": "Yooo",
+        "platform": "instagram",
+        "username": "renaeericahub",
+    },
+
+    # PRUDHIV
+    {
+        "owner": "Prudhiv",
+        "platform": "tiktok",
+        "username": "renaeericatv",
+    },
+    {
+        "owner": "Prudhiv",
+        "platform": "tiktok",
+        "username": "renaeericadaily",
+    },
+    {
+        "owner": "Prudhiv",
+        "platform": "instagram",
+        "username": "renaeericatvx",
+    },
+    {
+        "owner": "Prudhiv",
+        "platform": "instagram",
+        "username": "renaeericadaily",
+    },
+
+    # ANYA
+    {
+        "owner": "Anya",
+        "platform": "instagram",
+        "username": "renaeerica.fanpage",
+    },
+    {
+        "owner": "Anya",
+        "platform": "tiktok",
+        "username": "renaeerica.fanpage",
+    },
 ]
 
-INSTAGRAM_ACCOUNTS = [
-    "renaeericacentral",
-    "renaeericahub",
-    "renaeericatvx",
-    "renaeericadaily",
-    "renaeerica.fanpage",
-]
+
+# ============================================================
+# DATE
+# ============================================================
+
+def get_target_date():
+    """
+    Optional:
+        python tracker.py 2026-08-21
+
+    If no date is supplied, yesterday is used.
+    """
+
+    if len(sys.argv) > 1 and sys.argv[1].strip():
+        return datetime.strptime(
+            sys.argv[1].strip(),
+            "%Y-%m-%d"
+        ).date()
+
+    return (
+        datetime.now(timezone.utc).date()
+        - timedelta(days=1)
+    )
+
+
+TARGET_DATE = get_target_date()
+
+START_TIME = datetime.combine(
+    TARGET_DATE,
+    datetime.min.time(),
+    tzinfo=timezone.utc
+)
+
+END_TIME = START_TIME + timedelta(hours=WINDOW_HOURS)
+
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+def parse_datetime(value):
+    if value is None:
+        return None
+
+    if isinstance(value, (int, float)):
+        # TikTok timestamps are often Unix timestamps
+        try:
+            return datetime.fromtimestamp(
+                value,
+                tz=timezone.utc
+            )
+        except Exception:
+            return None
+
+    value = str(value).strip()
+
+    if not value:
+        return None
+
+    try:
+        if value.endswith("Z"):
+            value = value[:-1] + "+00:00"
+
+        dt = datetime.fromisoformat(value)
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        return dt.astimezone(timezone.utc)
+
+    except Exception:
+        pass
+
+    # Common timestamp formats
+    formats = [
+        "%Y-%m-%dT%H:%M:%S.%fZ",
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%d %H:%M:%S",
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.strptime(
+                value,
+                fmt
+            ).replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+
+    return None
+
+
+def get_timestamp(item, platform):
+    """
+    Tries the timestamp fields used by TikTok and Instagram
+    scrapers.
+    """
+
+    possible_fields = []
+
+    if platform == "tiktok":
+        possible_fields = [
+            "createTime",
+            "createTimeISO",
+            "timestamp",
+            "createdAt",
+            "date",
+            "publishedAt",
+        ]
+
+    else:
+        possible_fields = [
+            "timestamp",
+            "takenAt",
+            "takenAtTimestamp",
+            "createdAt",
+            "date",
+            "publishedAt",
+        ]
+
+    for field in possible_fields:
+        if field in item:
+            dt = parse_datetime(item.get(field))
+
+            if dt:
+                return dt
+
+    return None
+
+
+def is_in_window(dt):
+    if not dt:
+        return False
+
+    return START_TIME <= dt < END_TIME
 
 
 # ============================================================
 # APIFY
 # ============================================================
 
-def run_apify(actor, actor_input):
-    if not APIFY_TOKEN:
-        raise RuntimeError(
-            "APIFY_API_TOKEN GitHub secret is missing."
-        )
+def run_actor(actor_id, run_input):
+    """
+    Starts an Apify actor and waits for completion.
+    """
+
+    encoded_actor = quote(
+        actor_id,
+        safe=""
+    )
 
     url = (
         f"https://api.apify.com/v2/acts/"
-        f"{actor}/run-sync-get-dataset-items"
+        f"{encoded_actor}/runs"
     )
+
+    headers = {
+        "Authorization": f"Bearer {APIFY_TOKEN}",
+        "Content-Type": "application/json",
+    }
 
     response = requests.post(
         url,
-        params={"token": APIFY_TOKEN},
-        json=actor_input,
-        timeout=300,
+        headers=headers,
+        json=run_input,
+        timeout=60,
     )
 
-    if not response.ok:
-        raise RuntimeError(
-            f"Apify returned HTTP {response.status_code}: "
-            f"{response.text[:1000]}"
+    response.raise_for_status()
+
+    run_data = response.json()["data"]
+
+    run_id = run_data["id"]
+    dataset_id = run_data["defaultDatasetId"]
+
+    # Wait for the actor
+    status_url = (
+        f"https://api.apify.com/v2/actor-runs/"
+        f"{run_id}"
+    )
+
+    for _ in range(180):
+        status_response = requests.get(
+            status_url,
+            headers=headers,
+            timeout=60,
         )
 
-    data = response.json()
+        status_response.raise_for_status()
 
-    if not isinstance(data, list):
+        status = status_response.json()["data"]["status"]
+
+        if status in {
+            "SUCCEEDED",
+            "FAILED",
+            "ABORTED",
+            "TIMED-OUT",
+        }:
+            break
+
+        time.sleep(2)
+
+    if status != "SUCCEEDED":
         raise RuntimeError(
-            f"Unexpected Apify response: "
-            f"{type(data).__name__}"
+            f"Apify actor failed with status: {status}"
         )
 
-    return data
+    dataset_url = (
+        f"https://api.apify.com/v2/datasets/"
+        f"{dataset_id}/items"
+        f"?clean=true&format=json"
+    )
+
+    dataset_response = requests.get(
+        dataset_url,
+        headers=headers,
+        timeout=120,
+    )
+
+    dataset_response.raise_for_status()
+
+    return dataset_response.json()
 
 
 # ============================================================
-# TIME
+# SCRAPE TIKTOK
 # ============================================================
 
-def parse_timestamp(value):
-    if value is None:
-        return None
+def scrape_tiktok(username):
+    actor_id = "clockworks~tiktok-scraper"
+
+    run_input = {
+        "profiles": [username],
+        "resultsPerPage": 100,
+        "shouldDownloadVideos": False,
+        "shouldDownloadCovers": False,
+        "shouldDownloadSlideshowImages": False,
+    }
 
     try:
-        # Unix timestamp
-        if isinstance(value, (int, float)):
-            value = float(value)
-
-            if value > 10_000_000_000:
-                value /= 1000
-
-            return datetime.fromtimestamp(
-                value,
-                tz=timezone.utc,
-            )
-
-        value = str(value).strip()
-
-        if not value:
-            return None
-
-        # Numeric timestamp stored as string
-        if value.isdigit():
-            number = float(value)
-
-            if number > 10_000_000_000:
-                number /= 1000
-
-            return datetime.fromtimestamp(
-                number,
-                tz=timezone.utc,
-            )
-
-        # ISO timestamp
-        value = value.replace(
-            "Z",
-            "+00:00",
+        return run_actor(
+            actor_id,
+            run_input
         )
 
-        dt = datetime.fromisoformat(value)
-
-        if dt.tzinfo is None:
-            dt = dt.replace(
-                tzinfo=timezone.utc
-            )
-
-        return dt.astimezone(
-            timezone.utc
+    except Exception as e:
+        print(
+            f"TikTok error @{username}: {e}"
         )
-
-    except Exception:
-        return None
-
-
-def build_window(target_date):
-    """
-    Historical:
-        00:00 to 00:00 of the requested date
-        in India time.
-
-    Normal:
-        Previous rolling 24 hours.
-    """
-
-    now = datetime.now(timezone.utc)
-
-    if target_date:
-        target_date = str(
-            target_date
-        ).strip()
-
-        # Remove accidental quotes
-        target_date = (
-            target_date
-            .strip('"')
-            .strip("'")
-            .strip()
-        )
-
-        try:
-            # IMPORTANT:
-            # Explicitly parse YYYY-MM-DD.
-            local_start = datetime.strptime(
-                target_date,
-                "%Y-%m-%d",
-            ).replace(
-                tzinfo=IST
-            )
-
-        except ValueError:
-            raise ValueError(
-                f"Invalid target_date "
-                f"{target_date!r}. "
-                f"Use YYYY-MM-DD, "
-                f"for example 2026-08-21."
-            )
-
-        local_end = (
-            local_start
-            + timedelta(days=1)
-        )
-
-        return (
-            local_start.astimezone(
-                timezone.utc
-            ),
-            local_end.astimezone(
-                timezone.utc
-            ),
-        )
-
-    return (
-        now - timedelta(
-            hours=WINDOW_HOURS
-        ),
-        now,
-    )
+        return []
 
 
 # ============================================================
-# TIKTOK
+# SCRAPE INSTAGRAM
 # ============================================================
 
-def get_tiktok_username(item):
+def scrape_instagram(username):
+    actor_id = "apify~instagram-scraper"
 
-    author = item.get("authorMeta")
-
-    if isinstance(author, dict):
-
-        for key in [
-            "name",
-            "uniqueId",
-            "unique_id",
-            "username",
-        ]:
-
-            value = author.get(key)
-
-            if value:
-                return (
-                    str(value)
-                    .lstrip("@")
-                    .lower()
-                )
-
-    for key in [
-        "authorUsername",
-        "username",
-        "uniqueId",
-    ]:
-
-        value = item.get(key)
-
-        if value:
-            return (
-                str(value)
-                .lstrip("@")
-                .lower()
-            )
-
-    return None
-
-
-def get_tiktok_time(item):
-
-    for key in [
-        "createTimeISO",
-        "createTime",
-        "create_time",
-    ]:
-
-        timestamp = parse_timestamp(
-            item.get(key)
-        )
-
-        if timestamp:
-            return timestamp
-
-    return None
-
-
-def get_tiktok_url(item):
-
-    for key in [
-        "webVideoUrl",
-        "webVideoUrlNoWaterMark",
-        "url",
-    ]:
-
-        if item.get(key):
-            return item[key]
-
-    return None
-
-
-def check_tiktok(start, end):
-
-    actor_input = {
-        "profiles": TIKTOK_ACCOUNTS,
-
-        "resultsPerPage": 20,
-
-        "profileScrapeSections": [
-            "videos"
+    run_input = {
+        "directUrls": [
+            f"https://www.instagram.com/{username}/"
         ],
-
-        "profileSorting": "latest",
-
-        "excludePinnedPosts": True,
-
-        "searchQueries": [],
-
-        "postURLs": [],
-
-        "scrapeRelatedVideos": False,
-
-        "scrapeAdditionalAuthorMeta": False,
-
-        "shouldDownloadVideos": False,
-
-        "shouldDownloadCovers": False,
-
-        "shouldDownloadSlideshowImages": False,
-
-        "shouldDownloadAvatars": False,
-
-        "shouldDownloadMusicCovers": False,
-
-        "commentsPerPost": 0,
-
-        "topLevelCommentsPerPost": 0,
-
-        "maxRepliesPerComment": 0,
+        "resultsType": "posts",
+        "resultsLimit": 100,
+        "searchType": "user",
     }
 
-    print("Running TikTok Actor...")
+    try:
+        return run_actor(
+            actor_id,
+            run_input
+        )
 
-    items = run_apify(
-        TIKTOK_ACTOR,
-        actor_input,
+    except Exception as e:
+        print(
+            f"Instagram error @{username}: {e}"
+        )
+        return []
+
+
+# ============================================================
+# CHECK ACCOUNT
+# ============================================================
+
+def check_account(account):
+    platform = account["platform"]
+    username = account["username"]
+
+    print(
+        f"Checking {platform} @{username}..."
     )
 
-    results = {
-        username: []
-        for username in TIKTOK_ACCOUNTS
-    }
+    if platform == "tiktok":
+        items = scrape_tiktok(username)
+    else:
+        items = scrape_instagram(username)
+
+    matching = []
 
     for item in items:
-
-        username = get_tiktok_username(
-            item
+        dt = get_timestamp(
+            item,
+            platform
         )
 
-        timestamp = get_tiktok_time(
-            item
-        )
+        if is_in_window(dt):
+            matching.append({
+                "timestamp": dt.isoformat(),
+                "url": (
+                    item.get("webVideoUrl")
+                    or item.get("url")
+                    or item.get("postUrl")
+                    or item.get("permalink")
+                ),
+            })
 
-        if not username:
-            continue
-
-        if not timestamp:
-            continue
-
-        if username not in results:
-            continue
-
-        if start <= timestamp < end:
-
-            results[username].append(
-                {
-                    "timestamp":
-                        timestamp.isoformat(),
-
-                    "url":
-                        get_tiktok_url(item),
-                }
-            )
-
-    return results
-
-
-# ============================================================
-# INSTAGRAM REELS
-# ============================================================
-
-def get_instagram_username(item):
-
-    for key in [
-        "ownerUsername",
-        "username",
-        "authorUsername",
-    ]:
-
-        value = item.get(key)
-
-        if value:
-            return (
-                str(value)
-                .lstrip("@")
-                .lower()
-            )
-
-    owner = item.get("owner")
-
-    if isinstance(owner, dict):
-
-        for key in [
-            "username",
-            "userName",
-        ]:
-
-            value = owner.get(key)
-
-            if value:
-                return (
-                    str(value)
-                    .lstrip("@")
-                    .lower()
-                )
-
-    return None
-
-
-def get_instagram_time(item):
-
-    for key in [
-        "timestamp",
-        "publishedAt",
-        "takenAt",
-        "createdAt",
-        "created_at",
-        "date",
-    ]:
-
-        timestamp = parse_timestamp(
-            item.get(key)
-        )
-
-        if timestamp:
-            return timestamp
-
-    return None
-
-
-def get_instagram_url(item):
-
-    if item.get("url"):
-        return item["url"]
-
-    if item.get("inputUrl"):
-        return item["inputUrl"]
-
-    shortcode = item.get(
-        "shortCode"
+    matching.sort(
+        key=lambda x: x["timestamp"]
     )
 
-    if shortcode:
+    count = len(matching)
 
-        return (
-            "https://www.instagram.com/reel/"
-            f"{shortcode}/"
-        )
+    if count >= REQUIRED_UPLOADS:
+        status = "✅"
+    elif count > 0:
+        status = "⚠️"
+    else:
+        status = "❌"
 
-    return None
-
-
-def check_instagram(start, end):
-
-    urls = [
-        f"https://www.instagram.com/{username}/"
-        for username in INSTAGRAM_ACCOUNTS
-    ]
-
-    actor_input = {
-
-        "directUrls": urls,
-
-        "resultsType": "reels",
-
-        "resultsLimit": 20,
-
-        # Don't use an exact timestamp here.
-        # We fetch the latest 20 and filter locally.
-        "addParentData": True,
+    return {
+        "owner": account["owner"],
+        "platform": platform,
+        "username": username,
+        "count": count,
+        "required": REQUIRED_UPLOADS,
+        "status": status,
+        "uploads": matching,
     }
-
-    print("Running Instagram Reel Actor...")
-
-    items = run_apify(
-        INSTAGRAM_ACTOR,
-        actor_input,
-    )
-
-    results = {
-        username: []
-        for username in INSTAGRAM_ACCOUNTS
-    }
-
-    for item in items:
-
-        # Ignore diagnostic/error rows
-        if item.get("errorReason"):
-            continue
-
-        username = (
-            get_instagram_username(item)
-        )
-
-        timestamp = (
-            get_instagram_time(item)
-        )
-
-        if not username:
-            continue
-
-        if not timestamp:
-            continue
-
-        if username not in results:
-            continue
-
-        if start <= timestamp < end:
-
-            results[username].append(
-                {
-                    "timestamp":
-                        timestamp.isoformat(),
-
-                    "url":
-                        get_instagram_url(item),
-                }
-            )
-
-    return results
 
 
 # ============================================================
-# MAIN
+# RUN ALL ACCOUNTS
 # ============================================================
 
 def main():
 
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument(
-        "--date",
-        required=False,
-        default=None,
-        help=(
-            "Historical date in "
-            "YYYY-MM-DD format."
-        ),
-    )
-
-    args = parser.parse_args()
-
-    start, end = build_window(
-        args.date
-    )
-
     print()
-    print("=" * 80)
-    print("RENAE UPLOAD TRACKER")
-    print("=" * 80)
-
-    print(
-        "Start UTC:",
-        start.isoformat()
-    )
-
-    print(
-        "End UTC:",
-        end.isoformat()
-    )
-
-    print(
-        "Required uploads:",
-        REQUIRED_UPLOADS
-    )
-
-    print("=" * 80)
+    print("====================================")
+    print("       RENAE UPLOAD CHECK")
+    print("====================================")
+    print()
+    print(f"Date: {TARGET_DATE}")
+    print(f"Required: {REQUIRED_UPLOADS} uploads")
+    print(f"Window: {WINDOW_HOURS} hours")
     print()
 
-    # --------------------------------------------------------
-    # Run both platforms
-    # --------------------------------------------------------
+    results = []
 
-    tiktok_results = check_tiktok(
-        start,
-        end,
-    )
+    for account in ACCOUNTS:
+        result = check_account(account)
 
-    instagram_results = check_instagram(
-        start,
-        end,
-    )
-
-    # --------------------------------------------------------
-    # Account information
-    # --------------------------------------------------------
-
-    accounts = [
-
-        {
-            "owner": "Yooo",
-            "platform": "tiktok",
-            "username": "renaeericacentral",
-        },
-
-        {
-            "owner": "Yooo",
-            "platform": "tiktok",
-            "username": "renaeericavods",
-        },
-
-        {
-            "owner": "Yooo",
-            "platform": "instagram",
-            "username": "renaeericacentral",
-        },
-
-        {
-            "owner": "Yooo",
-            "platform": "instagram",
-            "username": "renaeericahub",
-        },
-
-        {
-            "owner": "Prudhiv",
-            "platform": "tiktok",
-            "username": "renaeericatv",
-        },
-
-        {
-            "owner": "Prudhiv",
-            "platform": "instagram",
-            "username": "renaeericatvx",
-        },
-
-        {
-            "owner": "Prudhiv",
-            "platform": "instagram",
-            "username": "renaeericadaily",
-        },
-
-        {
-            "owner": "Prudhiv",
-            "platform": "tiktok",
-            "username": "renaeericadaily",
-        },
-
-        {
-            "owner": "Anya",
-            "platform": "instagram",
-            "username": "renaeerica.fanpage",
-        },
-
-        {
-            "owner": "Anya",
-            "platform": "tiktok",
-            "username": "renaeerica.fanpage",
-        },
-    ]
-
-    final_results = []
-
-    # --------------------------------------------------------
-    # Calculate results
-    # --------------------------------------------------------
-
-    for account in accounts:
-
-        username = account[
-            "username"
-        ].lower()
-
-        platform = account[
-            "platform"
-        ]
-
-        if platform == "tiktok":
-
-            uploads = tiktok_results.get(
-                username,
-                []
-            )
-
-        else:
-
-            uploads = instagram_results.get(
-                username,
-                []
-            )
-
-        uploads.sort(
-            key=lambda item:
-                item["timestamp"],
-            reverse=True,
-        )
-
-        count = len(uploads)
-
-        if count >= REQUIRED_UPLOADS:
-            status = "PASS"
-        else:
-            status = "BEHIND"
-
-        result = {
-            "owner":
-                account["owner"],
-
-            "platform":
-                platform,
-
-            "username":
-                username,
-
-            "status":
-                status,
-
-            "count":
-                count,
-
-            "required":
-                REQUIRED_UPLOADS,
-
-            "times":
-                [
-                    upload["timestamp"]
-                    for upload in uploads
-                ],
-
-            "urls":
-                [
-                    upload["url"]
-                    for upload in uploads
-                    if upload.get("url")
-                ],
-        }
-
-        final_results.append(
-            result
-        )
+        results.append(result)
 
         print(
-            f'{account["owner"]:8} | '
-            f'{platform:9} | '
-            f'@{username:25} | '
-            f'{count}/{REQUIRED_UPLOADS} | '
-            f'{status}'
+            f"{result['status']} "
+            f"{result['platform'].title()} "
+            f"@{result['username']} "
+            f"{result['count']}/{REQUIRED_UPLOADS}"
         )
 
-    # --------------------------------------------------------
-    # Save JSON
-    # --------------------------------------------------------
+    # ========================================================
+    # SUMMARY
+    # ========================================================
 
-    os.makedirs(
-        "results",
+    total_accounts = len(results)
+
+    completed = sum(
+        1
+        for r in results
+        if r["count"] >= REQUIRED_UPLOADS
+    )
+
+    behind = total_accounts - completed
+
+    # ========================================================
+    # CLEAN MARKDOWN
+    # ========================================================
+
+    lines = []
+
+    lines.append("# 🎬 Renae Upload Check")
+    lines.append("")
+    lines.append(
+        f"**📅 Date:** {TARGET_DATE}"
+    )
+    lines.append(
+        f"**🎯 Required:** {REQUIRED_UPLOADS} uploads/account"
+    )
+    lines.append(
+        f"**⏱️ Window:** {WINDOW_HOURS} hours"
+    )
+    lines.append("")
+
+    lines.append(
+        f"## 📊 {completed}/{total_accounts} Accounts Complete"
+    )
+
+    if behind == 0:
+        lines.append("")
+        lines.append(
+            "🎉 **Everyone has completed their uploads!**"
+        )
+    else:
+        lines.append("")
+        lines.append(
+            f"⚠️ **{behind} account(s) need more uploads.**"
+        )
+
+    lines.append("")
+
+    # Group by owner
+    owners = []
+
+    for result in results:
+        if result["owner"] not in owners:
+            owners.append(result["owner"])
+
+    for owner in owners:
+
+        lines.append(
+            f"## 👤 {owner}"
+        )
+        lines.append("")
+
+        owner_results = [
+            r for r in results
+            if r["owner"] == owner
+        ]
+
+        for platform in ["tiktok", "instagram"]:
+
+            platform_results = [
+                r
+                for r in owner_results
+                if r["platform"] == platform
+            ]
+
+            if not platform_results:
+                continue
+
+            lines.append(
+                f"### {platform.title()}"
+            )
+            lines.append("")
+
+            for r in platform_results:
+
+                lines.append(
+                    f"- {r['status']} "
+                    f"**@{r['username']}** — "
+                    f"**{r['count']}/{REQUIRED_UPLOADS}**"
+                )
+
+            lines.append("")
+
+    lines.append("---")
+    lines.append("")
+    lines.append(
+        "_Generated automatically by Renae Upload Tracker._"
+    )
+
+    clean_markdown = "\n".join(lines)
+
+    # ========================================================
+    # SAVE CLEAN RESULT
+    # ========================================================
+
+    results_dir = Path("results")
+    results_dir.mkdir(
+        parents=True,
         exist_ok=True
     )
 
-    if args.date:
+    markdown_file = (
+        results_dir /
+        f"{TARGET_DATE}.md"
+    )
 
-        filename = (
-            f"{args.date}.json"
-        )
+    json_file = (
+        results_dir /
+        f"{TARGET_DATE}.json"
+    )
 
-    else:
+    markdown_file.write_text(
+        clean_markdown,
+        encoding="utf-8"
+    )
 
-        filename = (
-            datetime.now(
-                timezone.utc
-            ).strftime(
-                "%Y-%m-%dT%H-%M-%SZ.json"
-            )
-        )
-
-    output = {
-
-        "checked_at":
-            datetime.now(
-                timezone.utc
-            ).isoformat(),
-
-        "timezone":
-            "Asia/Kolkata",
-
-        "target_date":
-            args.date,
-
-        "window_start":
-            start.isoformat(),
-
-        "window_end":
-            end.isoformat(),
-
-        "required_uploads":
-            REQUIRED_UPLOADS,
-
-        "window_hours":
-            WINDOW_HOURS,
-
-        "results":
-            final_results,
+    # JSON is kept only for the program.
+    # It is still much cleaner than raw Apify output.
+    clean_json = {
+        "date": str(TARGET_DATE),
+        "required_uploads": REQUIRED_UPLOADS,
+        "window_hours": WINDOW_HOURS,
+        "total_accounts": total_accounts,
+        "completed_accounts": completed,
+        "accounts_needing_uploads": behind,
+        "results": results,
     }
 
-    output_path = os.path.join(
-        "results",
-        filename
+    json_file.write_text(
+        json.dumps(
+            clean_json,
+            indent=2,
+            ensure_ascii=False
+        ),
+        encoding="utf-8"
     )
 
-    with open(
-        output_path,
-        "w",
-        encoding="utf-8",
-    ) as file:
+    # ========================================================
+    # ALSO PRINT CLEAN RESULT TO ACTIONS
+    # ========================================================
 
-        json.dump(
-            output,
-            file,
-            indent=2,
-            ensure_ascii=False,
+    print()
+    print("====================================")
+    print("         CLEAN RESULT")
+    print("====================================")
+    print()
+
+    print(
+        f"📅 {TARGET_DATE}"
+    )
+    print(
+        f"📊 {completed}/{total_accounts} complete"
+    )
+    print()
+
+    for owner in owners:
+
+        print(
+            f"👤 {owner}"
         )
 
-    print()
-    print("=" * 80)
+        owner_results = [
+            r for r in results
+            if r["owner"] == owner
+        ]
+
+        for r in owner_results:
+            print(
+                f"  {r['status']} "
+                f"{r['platform'].title()} "
+                f"@{r['username']} "
+                f"{r['count']}/{REQUIRED_UPLOADS}"
+            )
+
+        print()
+
     print(
-        f"Saved: {output_path}"
+        f"⚠️ Accounts needing uploads: {behind}"
     )
-    print("=" * 80)
+
     print()
+    print(
+        f"Clean result saved to: {markdown_file}"
+    )
+    print(
+        f"Machine result saved to: {json_file}"
+    )
 
 
 if __name__ == "__main__":
