@@ -1,0 +1,66 @@
+{
+  "accounts": [
+    {
+      "owner": "Yooo",
+      "platform": "tiktok",
+      "username": "renaeericacentral",
+      "url": "https://www.tiktok.com/@renaeericacentral"
+    },
+    {
+      "owner": "Yooo",
+      "platform": "tiktok",
+      "username": "renaeericavods",
+      "url": "https://www.tiktok.com/@renaeericavods"
+    },
+    {
+      "owner": "Yooo",
+      "platform": "instagram",
+      "username": "renaeericacentral",
+      "url": "https://www.instagram.com/renaeericacentral"
+    },
+    {
+      "owner": "Yooo",
+      "platform": "instagram",
+      "username": "renaeericahub",
+      "url": "https://www.instagram.com/renaeericahub"
+    },
+    {
+      "owner": "Prudhiv",
+      "platform": "tiktok",
+      "username": "renaeericatv",
+      "url": "https://www.tiktok.com/@renaeericatv"
+    },
+    {
+      "owner": "Prudhiv",
+      "platform": "instagram",
+      "username": "renaeericatvx",
+      "url": "https://www.instagram.com/renaeericatvx"
+    },
+    {
+      "owner": "Prudhiv",
+      "platform": "instagram",
+      "username": "renaeericadaily",
+      "url": "https://www.instagram.com/renaeericadaily"
+    },
+    {
+      "owner": "Prudhiv",
+      "platform": "tiktok",
+      "username": "renaeericadaily",
+      "url": "https://www.tiktok.com/@renaeericadaily"
+    },
+    {
+      "owner": "Anya",
+      "platform": "instagram",
+      "username": "renaeerica.fanpage",
+      "url": "https://www.instagram.com/renaeerica.fanpage"
+    },
+    {
+      "owner": "Anya",
+      "platform": "tiktok",
+      "username": "renaeerica.fanpage",
+      "url": "https://www.tiktok.com/@renaeerica.fanpage"
+    }
+  ],
+  "required_uploads": 3,
+  "window_hours": 24
+}
